@@ -1,5 +1,4 @@
 import socket
-import os
 from threading import Thread
 import parser
 from importlib import reload
@@ -74,11 +73,3 @@ master_server.start()
 
 threading.Thread(target=parser.c_parse, args=(client_queue, )).start()
 threading.Thread(target=parser.s_parse, args=(server_queue, )).start()
-
-# while True:
-#     try:
-#         obj = packet_queue.get()
-#         parser.parse(*obj)
-#     except Exception as e:
-#         print(obj[1], e)
-# master_server.join()

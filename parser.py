@@ -112,7 +112,6 @@ def set_state(value):
     print(f"Updated state to {value}")
 
 def noop(packet):
-    # return packet.hex()
     pass
 
 handelers = {
@@ -165,24 +164,19 @@ def c_parse(client_queue):
             if len(data) < packet_length:
                 data = o_data
                 break
-            # print(packet_length)
             packet, data = data[:packet_length], data[packet_length:]
             if compress > 0:
                 data_length, packet = decode_varint(packet)
                 if data_length > 0:
                     try:
                         packet = zlib.decompress(packet)
-                        # print(f"DCC client {packet}")
                     except:
-                        print(f"CND client {data_length} {packet}")
+                        print("Could not decompress packet!")
                         continue
-                        pass
                 else:
-                    # print(f"DND client {packet}")
                     pass
 
             (pid, packet) = decode_varint(packet)
-            # print(pid)
             msg = handelers["client"][state].get(pid, noop)(packet)
             if msg != None:
                 print(f"[client]({state}) {msg}")
@@ -190,10 +184,10 @@ def c_parse(client_queue):
 def s_parse(server_queue):
     data = b""
     while True:
-        or_packet = server_queue.get()
-        or_packet = s_cipher.decrypt(or_packet)
-        data += or_packet
-        while len(data) != 0:
+        new_packet = server_queue.get()
+        new_packet = s_cipher.decrypt(new_packet)
+        data += new_packet
+        while len(data) > 0:
             o_data = data
             try:
                 (packet_length, data) = decode_varint(data)
@@ -202,24 +196,19 @@ def s_parse(server_queue):
             if len(data) < packet_length:
                 data = o_data
                 break
-            # print(data)
             packet, data = data[:packet_length], data[packet_length:]
             if compress > 0:
                 data_length, packet = decode_varint(packet)
                 if data_length > 0:
                     try:
                         packet = zlib.decompress(packet)
-                        # print(f"DCC server {packet}")
                     except:
-                        print(f"CND server {data_length} {packet}")
+                        print("Could not decompress packet!")
                         continue
-                        pass
                 else:
-                    # print(f"DND server {packet}")
                     pass
 
             (pid, packet) = decode_varint(packet)
-            # print(pid)
             msg = handelers["server"][state].get(pid, noop)(packet)
             if msg != None:
                 print(f"[server]({state}) {msg}")
