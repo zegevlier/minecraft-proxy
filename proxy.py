@@ -69,6 +69,7 @@ class Proxy(Thread):
 
 
 master_server = Proxy('127.0.0.1', '34.90.214.148', 25565)
+# master_server = Proxy('127.0.0.1', 'play.schoolrp.net', 25565)
 master_server.start()
 
 threading.Thread(target=parser.c_parse, args=(client_queue, )).start()

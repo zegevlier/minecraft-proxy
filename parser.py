@@ -1,7 +1,14 @@
+from quarry.types.nbt import TagRoot
 from struct import pack
 from cipher import Cipher
 from utils import *
 import base64
+import os
+import config
+
+from quarry.types.nbt import TagRoot
+from quarry.types.chunk import BlockArray
+from quarry.types.registry import OpaqueRegistry
 
 import zlib
 
@@ -11,6 +18,7 @@ compress = 0
 c_cipher = Cipher()
 s_cipher = Cipher()
 
+shared_secret_hex = ""
 
 # ---------- HANDSHAKE ----------------
 
@@ -57,6 +65,10 @@ def c_login_enc_res(packet):
             actual_shared_secret = base64.b64decode(log_line.split("[STDOUT]: Secret Key: ")[1])
     c_cipher.enable(actual_shared_secret)
     s_cipher.enable(actual_shared_secret)
+    global shared_secret_hex
+    shared_secret_hex = actual_shared_secret.hex()
+    if config.WORLD_DOWNLOADER:
+        os.mkdir(os.path.join(config.BASE_DIR, shared_secret_hex))
 
     return f"LOGIN enc res ENCSharedSec: [{shared_secret.hex()}] ENCVerifyToken: [{verify_token.hex()}] ActualSharedSecret: [{actual_shared_secret.hex()}]"
 
@@ -104,7 +116,47 @@ def s_play_spawn_xp(packet):
     count, packet = decode_short(packet)
     return f"PLAY spawn_xp {eid} {x} {y} {z} {count}"
 
+def s_play_chunk_data(packet):
+    chunk_x, packet = decode_int(packet)
+    chunk_z, packet = decode_int(packet)
+    full_chunk, packet = decode_boolean(packet)
+    primary_bitmask, packet = decode_varint(packet)
+    heightmaps = TagRoot.from_bytes(packet)
+    heightmaps_len = len(heightmaps.to_bytes())
+    packet = packet[heightmaps_len:]
+    if full_chunk:
+        biomes_length, packet = decode_varint(packet)
+        biomes = []
+        for i in range(biomes_length):
+            b, packet = decode_varint(packet)
+            biomes.append(b)
+    size, packet = decode_varint(packet)
+    data, packet = packet[:size], packet[size:]
+
+    chunk_data = parse_chunk_packet_data(data)
+    num_block_entities, packet = decode_varint(packet)
+    entities = []
+    for i in range(num_block_entities):
+        entity = TagRoot.from_bytes(packet)
+        entity_len = len(entity.to_bytes())
+        packet = packet[entity_len:]
+        entities.append(entity)
+    return f"PLAY chunk_data {chunk_x} {chunk_z} {full_chunk} {primary_bitmask} {heightmaps} {biomes_length} BIOMES {size} DATA {num_block_entities} {entities}"
+
+
 # ----------- OTHER STUFF -----------
+
+def parse_chunk_packet_data(data):
+    block_count, data = decode_short(data)
+    bits_per_block, data = decode_unsigned_byte(data)
+    
+    palette, data = None, data
+    data_array_length, data = decode_varint(data)
+    chunk_data = BlockArray.from_bytes(data[:data_array_length], bits_per_block, OpaqueRegistry(14), palette, block_count)
+    for i in range(data_array_length):
+        d, data = decode_long(data)
+        data_arr.append(d)
+
 
 def set_state(value):
     global state
@@ -128,7 +180,8 @@ handelers = {
         }, 
         {
             0x01: s_play_spawn_xp,
-            0x24: s_play_joingame
+            0x24: s_play_joingame,
+            0x20: s_play_chunk_data
         }
     ], 
     "client": [

@@ -1,1 +1,3 @@
 DEBUG_MODE = True
+WORLD_DOWNLOADER = True
+BASE_DIR = "./u_worlds"
