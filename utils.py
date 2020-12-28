@@ -1,7 +1,15 @@
 import struct
 
 def decode_boolean(packet):
-    return bool(packet[:1]), packet[1:]
+    value = packet[:1]
+    if value == b'\x01':
+        value = True
+    elif value == b'\x00':
+        value = False
+    else:
+        print(value)
+        raise(ValueError)
+    return value, packet[1:]
 
 def decode_byte(packet):
     return unpack(">b", packet)
@@ -22,7 +30,7 @@ def decode_long(packet):
     return unpack(">q", packet)
 
 def decode_float(packet):
-    return unpack("f", packet)
+    return unpack(">f", packet)
 
 def decode_double(packet):
     return unpack(">d", packet)

@@ -1,4 +1,4 @@
-from quarry.types.nbt import TagRoot
+from functools import singledispatch
 from struct import pack
 from cipher import Cipher
 from utils import *
@@ -7,9 +7,6 @@ import os
 import config
 
 from quarry.types.nbt import TagRoot
-from quarry.types.chunk import BlockArray
-from quarry.types.registry import OpaqueRegistry
-
 import zlib
 
 state = 0
@@ -20,6 +17,8 @@ s_cipher = Cipher()
 
 shared_secret_hex = ""
 
+
+statistic_catagories = ["mined", "crafted", "used", "broken", "picked_up", "dropped", "killed", "killed_by", "costum"]
 
 # ---------- HANDSHAKE ----------------
 
@@ -74,8 +73,7 @@ def c_login_enc_res(packet):
     s_cipher.enable(actual_shared_secret)
     global shared_secret_hex
     shared_secret_hex = actual_shared_secret.hex()
-    if config.WORLD_DOWNLOADER:
-        os.mkdir(os.path.join(config.BASE_DIR, shared_secret_hex))
+    os.mkdir(os.path.join(config.BASE_DIR, shared_secret_hex))
 
     return f"LOGIN enc res ENCSharedSec: [{shared_secret.hex()}] ENCVerifyToken: [{verify_token.hex()}] " \
            f"ActualSharedSecret: [{actual_shared_secret.hex()}] "
@@ -116,6 +114,27 @@ def c_play_settings(packet):
            f"0{bin(displayed_skin_parts).replace('0b', '')} {main_hand}"
 
 
+def c_play_vehicle_move(packet):
+    print("MOVED!!")
+    x, packet = decode_double(packet)
+    y, packet = decode_double(packet)
+    z, packet = decode_double(packet)
+    yaw, packet = decode_float(packet)
+    pitch, packet = decode_float(packet)
+    if config.VEHICLE_MOVE:
+        return f"PLAY vehicle_move {x} {y} {z} {yaw} {pitch}"
+
+
+def c_play_player_abilities(packet):
+    flags, packet = decode_byte(packet)
+    if flags == 0x02:
+        flying = True
+    else:
+        flying = False
+    if config.PLAYER_ABILITIES:
+        return f"PLAY player_abilities flying: {flying}"
+
+
 def s_play_join_game(packet):
     player_eid, packet = packet[:4], packet[4:]
     is_hardcore, packet = decode_boolean(packet)
@@ -129,64 +148,186 @@ def s_play_spawn_xp(packet):
     y, packet = decode_double(packet)
     z, packet = decode_double(packet)
     count, packet = decode_short(packet)
-    return f"PLAY spawn_xp {eid} {x} {y} {z} {count}"
+    if config.SPAWN_XP:
+        return f"PLAY spawn_xp {eid} {x} {y} {z} {count}"
 
 
 def s_play_chunk_data(packet):
-    or_packet = packet
-    chunk_x, packet = decode_int(packet)
-    chunk_z, packet = decode_int(packet)
-    with open(os.path.join(config.BASE_DIR, shared_secret_hex, f"{chunk_x}.{chunk_z}.chunk_packet"), "wb") as f:
-        f.write(or_packet)
-    # full_chunk, packet = decode_boolean(packet)
-    # primary_bitmask, packet = decode_varint(packet)
-    # heightmaps = TagRoot.from_bytes(packet)
-    # heightmaps_len = len(heightmaps.to_bytes())
-    # packet = packet[heightmaps_len:]
-    # if full_chunk:
-    #     biomes_length, packet = decode_varint(packet)
-    #     biomes = []
-    #     for i in range(biomes_length):
-    #         b, packet = decode_varint(packet)
-    #         biomes.append(b)
-    # size, packet = decode_varint(packet)
-    # data, packet = packet[:size], packet[size:]
-
-    # chunk_data = parse_chunk_packet_data(data) num_block_entities, packet = decode_varint(packet) entities = [] for
-    # i in range(num_block_entities): entity = TagRoot.from_bytes(packet) entity_len = len(entity.to_bytes()) packet
-    # = packet[entity_len:] entities.append(entity) return f"PLAY chunk_data {chunk_x} {chunk_z} {full_chunk} {
-    # primary_bitmask} {heightmaps} {biomes_length} BIOMES {size} DATA {num_block_entities} {entities}"
+    if config.WORLD_DOWNLOADER:
+        or_packet = packet
+        chunk_x, packet = decode_int(packet)
+        chunk_z, packet = decode_int(packet)
+        with open(os.path.join(config.BASE_DIR, shared_secret_hex, f"{chunk_x}.{chunk_z}.chunk_packet"), "wb") as f:
+            f.write(or_packet)
 
 
 def s_play_light_data(packet):
-    or_packet = packet
-    chunk_x, packet = decode_varint(packet)
-    chunk_z, packet = decode_varint(packet)
-    with open(os.path.join(config.BASE_DIR, shared_secret_hex, f"{chunk_x}.{chunk_z}.light_packet"), "wb") as f:
-        f.write(or_packet)
+    if config.WORLD_DOWNLOADER:
+        or_packet = packet
+        chunk_x, packet = decode_varint(packet)
+        chunk_z, packet = decode_varint(packet)
+        with open(os.path.join(config.BASE_DIR, shared_secret_hex, f"{chunk_x}.{chunk_z}.light_packet"), "wb") as f:
+            f.write(or_packet)
 
 
 def s_play_resource_pack(packet):
     url, packet = decode_string(packet)
-    _hash, _packet = decode_string(packet)
+    hash, _packet = decode_string(packet)
     with open(os.path.join(config.BASE_DIR, shared_secret_hex, f"resource_pack_link.url"), "w") as f:
         f.write(url)
+    return f"PLAY resource_pack {url} {hash}"
+
+
+def s_play_disconnect(packet):
+    set_state(0)
+    global compress
+    compress = 0
+    c_cipher.disable()
+    s_cipher.disable()
+    reason, packet = decode_chat(packet)
+    return f"PLAY disconnect {reason}"
+
+
+def s_play_block_entity_data(packet):
+    position, packet = packet[:8], packet[8:]
+    action, packet = decode_unsigned_byte(packet)
+    nbt_data = TagRoot.from_bytes(packet)
+    if config.BLOCK_ENTITY_UPDATES:
+        return f"PLAY block_entity_update {action} {nbt_data}"
+
+
+def s_play_nbt_query_resp(packet):
+    print("activated")
+    transaction_id, packet = decode_varint(packet)
+    nbt_data = TagRoot.from_bytes(packet)
+    if config.NBT_QUERY_RESP:
+        return f"PLAY nbt_query_resp {transaction_id} {nbt_data}"
+
+
+def s_play_tab_complete(packet):
+    pid, packet = decode_varint(packet)
+    start, packet = decode_varint(packet)
+    length, packet = decode_varint(packet)
+    count, packet = decode_varint(packet)
+    matches = []
+    for i in range(count):
+        match, packet = decode_string(packet)
+        has_tooltip, packet = decode_boolean(packet)
+        if not has_tooltip:
+            tooltip, packet = decode_chat(packet)
+        matches.append(match)
+    if config.TAB_COMPLETE:
+        return f"PLAY tab_complete {pid} {start} {length} {matches}"
+
+
+def s_play_player_info(packet):
+    action, packet = decode_varint(packet)
+    num_players, packet = decode_varint(packet)
+    players = []
+    for i in range(num_players):
+        uuid, packet = decode_uuid(packet)
+        if action == 0:
+            name, packet = decode_string(packet)
+            num_properties, packet = decode_varint(packet)
+            properties = {}
+            for j in range(num_properties):
+                property_name, packet = decode_string(packet)
+                property_value, packet = decode_string(packet)
+                properties[property_name] = property_value
+                is_signed, packet = decode_boolean(packet)
+                if is_signed:
+                    signature, packet = decode_string(packet)
+            gamemode, packet = decode_varint(packet)
+            ping, packet = decode_varint(packet)
+            has_display_name, packet = decode_boolean(packet)
+            display_name = None
+            if has_display_name:
+                display_name, packet = decode_chat(packet)
+            players.append(f"{uuid} {name} {properties} {gamemode} {ping} {display_name}")
+        elif action == 1:
+            gamemode, packet = decode_varint(packet)
+            players.append(f"{uuid} {gamemode}")
+        elif action == 2:
+            ping, packet = decode_varint(packet)
+            players.append(f"{uuid} {ping}")
+        elif action == 3:
+            has_display_name, packet = decode_boolean(packet)
+            display_name = None
+            if has_display_name:
+                display_name, packet = decode_chat(packet)
+            players.append(f"{uuid} {display_name}")
+        elif action == 4:
+            players.append(f"{uuid}")
+        
+
+    if config.PLAYER_INFO:
+        return f"PLAY player_info {action} {players}"
+
+
+def s_play_declare_recipes(packet):
+    num_recipes, packet = decode_varint(packet)
+    recipes = []
+    for i in range(num_recipes):
+        recipe_type, packet = decode_string(packet)
+        if "crafting_shapeless" in recipe_type:
+            group, packet = decode_string(packet)
+            ingredient_count, packet = decode_varint(packet)
+
+        elif "crafting_shaped" in recipe_type:
+            pass
+        elif "crafting_special_armordye" in recipe_type:
+            pass
+        elif "crafting_special_bookcloning" in recipe_type:
+            pass
+        elif "crafting_special_mapcloning" in recipe_type:
+            pass
+        elif "crafting_special_mapextending" in recipe_type:
+            pass
+        elif "crafting_special_firework_rocket" in recipe_type:
+            pass
+        elif "crafting_special_firework_star" in recipe_type:
+            pass
+        elif "crafting_special_firework_star_fade" in recipe_type:
+            pass
+        elif "crafting_special_repairitem" in recipe_type:
+            pass
+        elif "crafting_special_tippedarrow" in recipe_type:
+            pass
+        elif "crafting_special_bannerduplicate" in recipe_type:
+            pass
+        elif "crafting_special_banneraddpattern" in recipe_type:
+            pass
+        elif "crafting_special_shielddecoration" in recipe_type:
+            pass
+        elif "crafting_special_shulkerboxcoloring" in recipe_type:
+            pass
+        elif "smelting" in recipe_type:
+            pass
+        elif "blasting" in recipe_type:
+            pass
+        elif "smoking" in recipe_type:
+            pass
+        elif "campfire_cooking" in recipe_type:
+            pass
+        elif "stonecutting" in recipe_type:
+            pass
+        elif "smithing" in recipe_type:
+            pass
+    if config.DECLARE_RECIPES:
+        return f"PLAY declare_recipes {packet}"
+
+def s_play_statistics(packet):
+    count, packet = decode_varint(packet)
+    stats = []
+    for i in range(count):
+        catagory_id, packet = decode_varint(packet)
+        statstic_id, packet = decode_varint(packet)
+        value, packet = decode_varint(packet)
+        stats.append(f"{statistic_catagories[catagory_id]} {statstic_id} {value}")
+    return f"PLAY stastics {stats}"
 
 
 # ----------- OTHER STUFF -----------
-
-def parse_chunk_packet_data(data):
-    block_count, data = decode_short(data)
-    bits_per_block, data = decode_unsigned_byte(data)
-
-    palette, data = None, data
-    _data_array_length, _data = decode_varint(data)
-    # chunk_data = BlockArray.from_bytes(data[:data_array_length], \
-    # bits_per_block, OpaqueRegistry(14), palette, block_count)
-    # for i in range(data_array_length):
-    # d, data = decode_long(data)
-    # data_arr.append(d)
-
 
 def set_state(value):
     global state
@@ -212,10 +353,17 @@ handlers = {
         },
         {
             0x01: s_play_spawn_xp,
+            0x09: s_play_block_entity_data,
+            0x06: s_play_statistics,
+            0xF: s_play_tab_complete,
+            0x19: s_play_disconnect,
             0x20: s_play_chunk_data,
             0x23: s_play_light_data,
             0x24: s_play_join_game,
+            0x32: s_play_player_info,
             0x38: s_play_resource_pack,
+            0x54: s_play_nbt_query_resp,
+            # 0x5A: s_play_declare_recipes
         }
     ],
     "client": [
@@ -231,7 +379,9 @@ handlers = {
             0x01: c_login_enc_res
         },
         {
-            0x05: c_play_settings
+            0x05: c_play_settings,
+            0x16: c_play_vehicle_move,
+            0x1A: c_play_player_abilities,
         }
     ],
 }

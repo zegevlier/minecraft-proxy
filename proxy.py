@@ -1,10 +1,11 @@
 import socket
+import threading
+from queue import Queue
 from threading import Thread
-import parser
+
 from importlib import reload
 
-from queue import Queue
-import threading
+import parser
 
 server_queue = Queue()
 client_queue = Queue()
@@ -14,7 +15,7 @@ class Proxy2Server(Thread):
 
     def __init__(self, host, port):
         super(Proxy2Server, self).__init__()
-        self.game = None # game client socket not known yet
+        self.game = None  # game client socket not known yet
         self.port = port
         self.host = host
         self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -27,11 +28,12 @@ class Proxy2Server(Thread):
                 server_queue.put(data)
                 self.game.sendall(data)
 
+
 class Game2Proxy(Thread):
 
     def __init__(self, host, port):
         super(Game2Proxy, self).__init__()
-        self.server = None # real server socket not known yet
+        self.server = None  # real server socket not known yet
         self.port = port
         self.host = host
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -47,7 +49,10 @@ class Game2Proxy(Thread):
                 client_queue.put(data)
                 self.server.sendall(data)
 
+
 class Proxy(Thread):
+    g2p = None
+    p2s = None
 
     def __init__(self, from_host, to_host, port):
         super(Proxy, self).__init__()
@@ -58,7 +63,7 @@ class Proxy(Thread):
     def run(self):
         while True:
             print("[proxy] setting up")
-            self.g2p = Game2Proxy(self.from_host, self.port) # waiting for a client
+            self.g2p = Game2Proxy(self.from_host, self.port)  # waiting for a client
             self.p2s = Proxy2Server(self.to_host, self.port)
             print("[proxy] connection established")
             self.g2p.server = self.p2s.server
@@ -68,9 +73,9 @@ class Proxy(Thread):
             self.p2s.start()
 
 
-# master_server = Proxy('127.0.0.1', '34.90.214.148', 25565)
-master_server = Proxy('127.0.0.1', 'play.schoolrp.net', 25565)
+master_server = Proxy('127.0.0.1', '34.90.214.148', 25565)
+# master_server = Proxy('127.0.0.1', 'play.schoolrp.net', 25565)
 master_server.start()
 
-threading.Thread(target=parser.c_parse, args=(client_queue, )).start()
-threading.Thread(target=parser.s_parse, args=(server_queue, )).start()
+threading.Thread(target=parser.c_parse, args=(client_queue,)).start()
+threading.Thread(target=parser.s_parse, args=(server_queue,)).start()
