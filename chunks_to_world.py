@@ -1,6 +1,7 @@
 import os
 import config
 from utils import *
+import math
 
 from quarry.types.nbt import TagRoot
 from quarry.types.chunk import BlockArray, PackedArray
@@ -14,27 +15,37 @@ def parse_chunk_packet_data(data, bitmask):
     sections = []
     # print()
     bitmask = reversed(format(primary_bitmask, "b").zfill(8))
-    for bit in bitmask:
+    for i, bit in enumerate(bitmask):
         if bit == "1":
+            print("seid: ", i)
             block_count, data = decode_short(data)
             bits_per_block, data = decode_unsigned_byte(data)
             actual_bpb = bits_per_block
-            if actual_bpb <= 4:
+            global_pallete = False
+            if bits_per_block < 4:
                 actual_bpb = 4
-            elif actual_bpb >= 9:
+            elif bits_per_block >= 9:
                 actual_bpb = 14
-            print(bits_per_block)
-            palette_length, data = decode_varint(data)
-            print(palette_length)
-            palette, data = data[:palette_length*actual_bpb], data[palette_length*actual_bpb:]
+                global_pallete = True
+            print("obpb: ", bits_per_block)
+            if not global_pallete:
+                palette_length, data = decode_varint(data)
+                for i in range(palette_length):
+                    _, data = decode_varint(data)
             data_array_len, data = decode_varint(data)
-            data_array = PackedArray.empty_block()
-            data_len = len(data_array.to_bytes())
+            print("darl: ", data_array_len)
+            # data_array = PackedArray.from_block_bytes(data, actual_bpb)
+            # data_len = len(data_array.to_bytes())
+            data_len = math.ceil(4096 / 64 // bits_per_block)
+            # data_len = 4096*bits_per_block
+            print("datl: ", data_len)
             data = data[data_len:]
-            print("a")
+            print("section done")
 
             # data_array = BlockArray.from_bytes(data, palette, default_registry)
             # print(data_array)
+    print("chunk done")
+    return "a"
 
 
 
@@ -82,5 +93,6 @@ if __name__ == "__main__":
             entity_len = len(entity.to_bytes())
             packet = packet[entity_len:]
             block_entities.append(entity)
+    print("All done! :D")
 
 
