@@ -1,8 +1,18 @@
 import zlib
-from quarry.types.nbt import TagRoot
+from quarry.types.nbt import TagRoot, RegionFile
 from utils import *
+import struct
 
 sector_size = 4096
+outfile = "close/region/r.0.0.mca"
+
+
+with open(outfile, "wb") as f:
+    data = struct.pack("b", 0)
+    all_data = b""
+    for _ in range(sector_size*2):
+        all_data+=data
+    f.write(data)
 
 with open("r.0.0.mca", "rb") as f:
     data = f.read()
@@ -32,7 +42,10 @@ for x, s in enumerate(chunks):
             else:
                 raise TypeError
             parsed_nbt = TagRoot.from_bytes(chunk_data)
-            parsed_nbt.update({"Biomes": None})
+            del parsed_nbt.body.value["Level"].value["Biomes"]
             print(parsed_nbt.to_obj())
+            region_file = RegionFile(outfile)
+            region_file.save_chunk(parsed_nbt)
+            region_file.close()
             raise TypeError
 
