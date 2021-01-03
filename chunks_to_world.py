@@ -13,7 +13,6 @@ default_registry = OpaqueRegistry(14)
 
 def parse_chunk_packet_data(data, bitmask):
     sections = []
-    # print()
     bitmask = reversed(format(primary_bitmask, "b").zfill(8))
     for i, bit in enumerate(bitmask):
         if bit == "1":
@@ -27,23 +26,17 @@ def parse_chunk_packet_data(data, bitmask):
             elif bits_per_block >= 9:
                 actual_bpb = 14
                 global_pallete = True
-            print("obpb: ", bits_per_block)
             if not global_pallete:
                 palette_length, data = decode_varint(data)
                 for i in range(palette_length):
                     _, data = decode_varint(data)
             data_array_len, data = decode_varint(data)
-            print("darl: ", data_array_len)
-            # data_array = PackedArray.from_block_bytes(data, actual_bpb)
-            # data_len = len(data_array.to_bytes())
-            data_len = math.ceil(4096 / 64 // bits_per_block)
-            # data_len = 4096*bits_per_block
-            print("datl: ", data_len)
+
+            data_len = math.ceil(data_array_len / (64 // actual_bpb))
+
             data = data[data_len:]
             print("section done")
 
-            # data_array = BlockArray.from_bytes(data, palette, default_registry)
-            # print(data_array)
     print("chunk done")
     return "a"
 

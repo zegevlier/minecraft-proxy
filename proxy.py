@@ -5,7 +5,7 @@ from threading import Thread
 
 from importlib import reload
 
-import parser
+import packet_parser as parser
 
 server_queue = Queue()
 client_queue = Queue()
@@ -73,8 +73,8 @@ class Proxy(Thread):
             self.p2s.start()
 
 
-master_server = Proxy('127.0.0.1', '34.90.214.148', 25565)
-# master_server = Proxy('127.0.0.1', 'play.schoolrp.net', 25565)
+# master_server = Proxy('127.0.0.1', '34.90.214.148', 25565)
+master_server = Proxy('127.0.0.1', 'play.schoolrp.net', 25565)
 master_server.start()
 
 threading.Thread(target=parser.c_parse, args=(client_queue,)).start()
