@@ -1,0 +1,5 @@
+https://github.com/barneygale/quarry/blob/313f9fdfc624f2eddcb3826adb0d871819f47ce2/quarry/types/nbt.py#L160
+https://minecraft.gamepedia.com/NBT_format
+https://minecraft.gamepedia.com/Chunk_format
+https://minecraft.gamepedia.com/Region_file_format
+https://wiki.vg/Data_types

@@ -6,7 +6,6 @@ import math
 from quarry.types.nbt import TagRoot
 from quarry.types.chunk import BlockArray, PackedArray
 from quarry.types.registry import OpaqueRegistry
-from quarry.types.nbt import TagRoot
 from struct import pack
 
 default_registry = OpaqueRegistry(14)
