@@ -6,3 +6,5 @@ out*.txt
 .idea
 u_worlds/*
 venv/*
+server.jar
+/generated/.chache*
